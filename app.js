@@ -32,7 +32,7 @@ const TRANSLATIONS = {
         title: 'ذكاء السوق',
         subtitle: 'مدعوم بـ Grok AI',
         lastUpdated: 'آخر تحديث',
-        daily Digest: 'ملخص اليوم',
+        dailyDigest: 'ملخص اليوم', // ✅ Fixed: was 'daily Digest'
         aiGenerated: 'مولد بالذكاء الاصطناعي',
         latestInsights: 'آخر الرؤى',
         dailyStockDiscoveries: 'اكتشافات الأسهم اليومية',
@@ -390,8 +390,8 @@ Fed Chair indicates unchanged rates through Q2 2025 with data-dependent approach
                     ticker: "NVDA",
                     name: "NVIDIA Corporation",
                     currentPrice: "$485",
-                    target Price: "$620",
-                    reason: "Leading AI chip manufacturer with 80% data center GPU market share. Recent H100 chip demand exceeding supply by 300%. Partnerships with all major cloud providers. Strong position in autonomous vehicles and edge AI.",
+                    targetPrice: "$620", // ✅ corrected
+                    reason: "Leading AI chip manufacturer...",
                     risk: "Medium"
                 },
                 {
