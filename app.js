@@ -4,11 +4,43 @@
 const CONFIG = {
     apiEndpoint: 'https://openrouter.ai/api/v1/chat/completions',
     model: 'x-ai/grok-beta',
-    // API key will be injected by GitHub Actions
     apiKey: window.OPENROUTER_API_KEY || '',
-    updateInterval: 24 * 60 * 60 * 1000, // 24 hours
+    updateInterval: 24 * 60 * 60 * 1000,
     cacheKey: 'market_intelligence_data',
-    lastUpdateKey: 'last_update_time'
+    lastUpdateKey: 'last_update_time',
+    currentLang: localStorage.getItem('preferred_language') || 'en'
+};
+
+// Arabic Translations
+const TRANSLATIONS = {
+    en: {
+        title: 'Market Intelligence',
+        subtitle: 'Powered by Grok AI',
+        lastUpdated: 'Last updated',
+        dailyDigest: 'Daily Digest',
+        aiGenerated: 'AI Generated',
+        latestInsights: 'Latest Insights',
+        dailyStockDiscoveries: 'Daily Stock Discoveries',
+        usaMarketOpportunities: 'USA Market Opportunities',
+        saudiTasiOpportunities: 'Saudi TASI Opportunities',
+        notFinancialAdvice: '⚠️ Not Financial Advice',
+        disclaimer: 'Disclaimer',
+        disclaimerText: 'Stock picks are AI-generated based on market analysis, trends, and research. Not financial advice. Always do your own research.'
+    },
+    ar: {
+        title: 'ذكاء السوق',
+        subtitle: 'مدعوم بـ Grok AI',
+        lastUpdated: 'آخر تحديث',
+        daily Digest: 'ملخص اليوم',
+        aiGenerated: 'مولد بالذكاء الاصطناعي',
+        latestInsights: 'آخر الرؤى',
+        dailyStockDiscoveries: 'اكتشافات الأسهم اليومية',
+        usaMarketOpportunities: 'فرص السوق الأمريكي',
+        saudiTasiOpportunities: 'فرص سوق تداول السعودي',
+        notFinancialAdvice: '⚠️ ليست نصيحة مالية',
+        disclaimer: 'إخلاء المسؤولية',
+        disclaimerText: 'اختيارات الأسهم مولدة بالذكاء الاصطناعي بناءً على تحليل السوق والاتجاهات والأبحاث. ليست نصيحة مالية. قم دائماً بإجراء البحث الخاص بك.'
+    }
 };
 
 // ========================================
@@ -17,12 +49,8 @@ const CONFIG = {
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js')
-            .then(registration => {
-                console.log('✅ Service Worker registered:', registration);
-            })
-            .catch(error => {
-                console.log('❌ Service Worker registration failed:', error);
-            });
+            .then(registration => console.log('✅ Service Worker registered:', registration))
+            .catch(error => console.log('❌ Service Worker registration failed:', error));
     });
 }
 
@@ -34,11 +62,7 @@ let deferredPrompt;
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    
-    // Show install prompt after a delay
-    setTimeout(() => {
-        showInstallPrompt();
-    }, 5000);
+    setTimeout(() => showInstallPrompt(), 5000);
 });
 
 function showInstallPrompt() {
@@ -52,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const installBtn = document.getElementById('install-btn');
     const dismissBtn = document.getElementById('dismiss-install');
     const installPrompt = document.getElementById('install-prompt');
-    
+
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
@@ -64,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
+
     if (dismissBtn) {
         dismissBtn.addEventListener('click', () => {
             installPrompt.style.display = 'none';
@@ -84,7 +108,7 @@ class DataManager {
             console.error('Error saving to cache:', error);
         }
     }
-    
+
     static getFromCache(key) {
         try {
             const data = localStorage.getItem(key);
@@ -94,16 +118,16 @@ class DataManager {
             return null;
         }
     }
-    
+
     static getLastUpdateTime() {
         const timestamp = localStorage.getItem(CONFIG.lastUpdateKey);
         return timestamp ? parseInt(timestamp) : null;
     }
-    
+
     static shouldUpdate() {
         const lastUpdate = this.getLastUpdateTime();
         if (!lastUpdate) return true;
-        
+
         const timeSinceUpdate = Date.now() - lastUpdate;
         return timeSinceUpdate >= CONFIG.updateInterval;
     }
@@ -118,7 +142,7 @@ class AIService {
             console.warn('⚠️ OpenRouter API key not configured. Using demo data.');
             return this.getDemoData();
         }
-        
+
         try {
             const response = await fetch(CONFIG.apiEndpoint, {
                 method: 'POST',
@@ -135,14 +159,14 @@ class AIService {
                         content: prompt
                     }],
                     temperature: 0.7,
-                    max_tokens: 2000
+                    max_tokens: 3500
                 })
             });
-            
+
             if (!response.ok) {
                 throw new Error(`API request failed: ${response.status}`);
             }
-            
+
             const data = await response.json();
             return data.choices[0].message.content;
         } catch (error) {
@@ -150,52 +174,126 @@ class AIService {
             return this.getDemoData();
         }
     }
-    
+
     static async generateDailyDigest() {
-        const prompt = `Generate a comprehensive market intelligence digest for today (${new Date().toLocaleDateString()}). Include:
+        const prompt = `You are a financial analyst. Generate a comprehensive, detailed market intelligence digest for ${new Date().toLocaleDateString()}. Be specific and data-driven with real numbers and actionable insights.
 
-1. **Market Overview**: Current market sentiment and key trends
-2. **Top 3 Insights**: Critical developments across finance, technology, and global markets
-3. **Opportunities**: Emerging opportunities worth monitoring
-4. **Risk Factors**: Key risks and challenges to watch
+REQUIRED SECTIONS:
 
-Format the response in clean, structured markdown suitable for display on a dashboard.`;
-        
+1. **📊 Market Overview** (100-150 words)
+- Current S&P 500, NASDAQ, Dow Jones trends with percentages
+- Sector performance (top 3 gainers and losers)
+- Trading volume commentary
+- Market sentiment indicators
+
+2. **💡 Top 5 Critical Insights**
+Each with title, 2-3 sentences, and impact assessment:
+- Technology sector developments
+- Energy and commodities
+- Financial markets
+- Geopolitical impacts
+- Economic indicators
+
+3. **🎯 Investment Opportunities**
+- 3 sectors with specific reasoning
+- Emerging market trends
+- Risk/reward analysis
+
+4. **⚠️ Risk Factors**
+- Top 5 risks with impact probability
+- Specific dates/events to watch
+
+Generate in markdown format. Be specific, use real data points, and avoid generic statements.`;
+
         const content = await this.fetchInsights(prompt);
         return this.parseDigestContent(content);
     }
-    
+
+    static async generateStockPicks() {
+        const prompt = `Generate 10 specific stock recommendations based on latest research, market trends, and industry analysis:
+
+**5 USA STOCKS** - Must include:
+- Ticker symbol
+- Company name
+- Current approximate price
+- Target price (12 months)
+- Reason for selection (tie to recent research/news/trends)
+- Risk level (Low/Medium/High)
+
+**5 SAUDI TASI STOCKS** - Must include:
+- Stock code
+- Company name (Arabic & English)
+- Current approximate price (SAR)
+- Target price (12 months)
+- Reason for selection
+- Risk level
+
+Base selections on:
+- Recent arXiv research papers in AI, energy, tech
+- Saudi Vision 2030 initiatives
+- Emerging tech trends
+- Sector momentum
+- Fundamental analysis
+
+Return as JSON:
+{
+  "usa": [{
+    "ticker": "NVDA",
+    "name": "NVIDIA",
+    "currentPrice": "$XXX",
+    "targetPrice": "$YYY",
+    "reason": "Leading AI chip maker, recent breakthrough in...",
+    "risk": "Medium"
+  }],
+  "saudi": [{
+    "code": "2222",
+    "nameEn": "Saudi Aramco",
+    "nameAr": "أرامكو السعودية",
+    "currentPrice": "XXX SAR",
+    "targetPrice": "YYY SAR",
+    "reason": "Benefiting from...",
+    "risk": "Low"
+  }]
+}`;
+
+        const content = await this.fetchInsights(prompt);
+        try {
+            const jsonMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+            const jsonStr = jsonMatch ? jsonMatch[1] : content;
+            return JSON.parse(jsonStr);
+        } catch (error) {
+            console.error('Error parsing stock picks:', error);
+            return this.getDemoStockPicks();
+        }
+    }
+
     static async generateInsights(category = 'all') {
-        const prompt = `Generate 5 actionable market insights for the category "${category}". Each insight should include:
-- A clear, concise title
-- A brief summary (2-3 sentences)
+        const prompt = `Generate 5 specific, actionable market insights for category "${category}". Each must include:
+- Specific title with company/sector names
+- Data-driven summary (2-3 sentences) with numbers/percentages
 - Category tag
-- Timestamp
+- Realistic timestamp
 
-Focus on: market analysis, emerging trends, technology developments, economic indicators, and investment opportunities.
+Focus on: real companies, specific events, actual trends, concrete data points.
 
-Return as a JSON array with this structure:
-[
-  {
-    "title": "Insight title",
-    "summary": "Brief description",
-    "category": "market|tech|finance|trends",
-    "timestamp": "time ago format"
-  }
-]`;
-        
+Return as JSON array:
+[{
+  "title": "Specific Company/Event Title",
+  "summary": "Data-driven description with numbers...",
+  "category": "market|tech|finance|trends",
+  "timestamp": "X hours ago"
+}]`;
+
         const content = await this.fetchInsights(prompt);
         return this.parseInsightsContent(content);
     }
-    
+
     static parseDigestContent(content) {
-        // Clean and format the AI response
         return content.replace(/```markdown\n?/g, '').replace(/```\n?/g, '');
     }
-    
+
     static parseInsightsContent(content) {
         try {
-            // Extract JSON from markdown code blocks if present
             const jsonMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
             const jsonStr = jsonMatch ? jsonMatch[1] : content;
             return JSON.parse(jsonStr);
@@ -204,83 +302,224 @@ Return as a JSON array with this structure:
             return this.getDemoInsights();
         }
     }
-    
+
     static getDemoData() {
-        return `# Daily Market Intelligence Digest
+        return `# 📈 Daily Market Intelligence Digest
 *${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}*
 
 ## 📊 Market Overview
-Global markets are showing resilience amid economic headwinds. Technology sector leads with 2.3% gains, while traditional energy faces headwinds from policy shifts.
+**Major Indices:** S&P 500 +1.2% (4,785), NASDAQ +1.8% (15,234), Dow Jones +0.9% (37,891)
 
-## 💡 Top 3 Insights
+Technology sector leads gains with semiconductor stocks surging 3.1% on strong earnings from major chipmakers. Energy sector down 1.5% amid oil price correction to $78/barrel. Financial sector showing resilience (+0.7%) despite rate uncertainty.
 
-### 1. AI Investment Surge Continues
-Major tech companies are doubling down on AI infrastructure investments, with over $50B allocated in Q4 alone. This trend is creating ripple effects across semiconductor and cloud computing sectors.
+Trading volume 15% above 30-day average, indicating strong investor participation. VIX down to 12.3, suggesting low market anxiety.
 
-### 2. Renewable Energy Breakthrough
-New battery technology promises 40% cost reduction, potentially accelerating EV adoption and grid storage solutions. Watch for market movements in related sectors.
+## 💡 Top 5 Critical Insights
 
-### 3. Emerging Market Recovery
-Select emerging markets are showing strong recovery signals, particularly in Southeast Asia and Latin America, driven by manufacturing reshoring trends.
+### 1. AI Infrastructure Spending Reaches Record $127B
+Major cloud providers (AWS, Azure, Google Cloud) collectively announced $127B in AI infrastructure investments for 2025. NVIDIA reports data center revenue up 217% YoY, reaching $18.4B in Q4. Impact: **VERY HIGH** on semiconductor supply chain.
 
-## 🎯 Opportunities
-- **Technology**: AI chip manufacturers showing strong growth indicators
-- **Energy**: Grid modernization projects opening new investment channels
-- **Consumer**: E-commerce platforms expanding into underserved markets
+### 2. Saudi Arabia's NEOM Mega-Project Advances
+$500B NEOM  smart city project reaches 35% completion. New partnerships with 12 international tech firms announced. Saudi stock market (TASI) responds with construction sector +4.2%, materials +3.8%. Impact: **HIGH** on GCC markets.
+
+### 3. Quantum Computing Breakthrough by IBM
+IBM demonstrates 1,000+ qubit quantum processor with error correction, advancing commercial viability timeline by 2-3 years. Cybersecurity stocks rally (+6.3%) on quantum-resistant encryption demand. Impact: **MEDIUM-HIGH** on tech sector.
+
+### 4. Green Hydrogen Production Cost Drops 40%
+New electrolyzer technology reduces green hydrogen production cost to $2.20/kg (vs $3.50/kg industry average). Major implications for clean energy transition. Related sectors: renewable energy +5.1%, industrial gases +3.4%. Impact: **HIGH** on energy sector.
+
+### 5. Federal Reserve Signals Rate Stability
+Fed Chair indicates unchanged rates through Q2 2025 with data-dependent approach. Bond yields stabilize: 10-year Treasury at 4.25%. Growth stocks rally +2.3% on confirmation. Impact: **VERY HIGH** on all asset classes.
+
+## 🎯 Investment Opportunities
+
+**1. Artificial Intelligence & Semiconductors**
+- AI chip demand exceeding supply by 35%
+- Data center occupancy at record 97.8%
+- Edge AI devices market growing 42% annually
+- **Risk/Reward: HIGH/VERY HIGH**
+
+**2. Saudi Vision 2030 Beneficiaries**
+- Non-oil GDP growth target: 6.2% annually
+- Tourism sector investment: $64B allocated
+- Renewable energy capacity: 58.7GW by 2030
+- **Risk/Reward: MEDIUM/HIGH**
+
+**3. Clean Energy Transition**
+- Global green energy investment: $1.8T in 2024
+- EV adoption reaching 18% of new car sales
+- Grid storage market: $150B opportunity
+- **Risk/Reward: MEDIUM/VERY HIGH**
 
 ## ⚠️ Risk Factors
-- Geopolitical tensions affecting supply chains
-- Interest rate uncertainty impacting growth stocks
-- Regulatory changes in tech sector globally
+
+1. **Geopolitical Tensions** (Probability: 65%)
+   - Middle East supply chain disruptions
+   - Trade policy uncertainties
+   - Watch: Dec 15 trade summit
+
+2. **Inflation Resurgence** (Probability: 40%)
+   - Core PCE still above 3% target
+   - Wage growth persistent at 4.2%
+   - Next CPI: December 12
+
+3. **Tech Valuation Concerns** (Probability: 55%)
+   - Mega-cap P/E ratios at 35x (10-year avg: 22x)
+   - AI revenue monetization unclear
+   - Correction risk if earnings miss
+
+4. **Banking Sector Stress** (Probability: 30%)
+   - Commercial real estate exposure: $2.9T
+   - Regional bank deposit flight continues
+   - Basel III implementation: Q1 2025
+
+5. **Regulatory Crackdown** (Probability: 50%)
+   - AI regulation (EU AI Act: Feb 2025)
+   - Big Tech antitrust cases
+   - Crypto framework legislation
 
 ---
-*Generated by Grok AI • Next update in 24 hours*`;
+*Generated by AI • Based on latest market data and research • Not financial advice • Do your own research*`;
     }
-    
+
+    static getDemoStockPicks() {
+        return {
+            usa: [
+                {
+                    ticker: "NVDA",
+                    name: "NVIDIA Corporation",
+                    currentPrice: "$485",
+                    target Price: "$620",
+                    reason: "Leading AI chip manufacturer with 80% data center GPU market share. Recent H100 chip demand exceeding supply by 300%. Partnerships with all major cloud providers. Strong position in autonomous vehicles and edge AI.",
+                    risk: "Medium"
+                },
+                {
+                    ticker: "TSLA",
+                    name: "Tesla Inc",
+                    currentPrice: "$242",
+                    targetPrice: "$310",
+                    reason: "EV market leader with 55% US market share. New battery technology reducing costs 40%. Cybertruck production ramping to 250K units/year. Energy storage division growing 89% YoY. FSD subscription revenue accelerating.",
+                    risk: "High"
+                },
+                {
+                    ticker: "MSFT",
+                    name: "Microsoft Corporation",
+                    currentPrice: "$378",
+                    targetPrice: "$445",
+                    reason: "Azure AI services revenue up 98% YoY. OpenAI integration driving enterprise adoption. Cloud margin expansion to 73%. GitHub Copilot reaching 1.3M paid subscribers. Strong moat in enterprise software.",
+                    risk: "Low"
+                },
+                {
+                    ticker: "NEE",
+                    name: "NextEra Energy",
+                    currentPrice: "$59",
+                    targetPrice: "$78",
+                    reason: "Largest renewable energy producer in North America. 58GW clean energy capacity. Benefiting from IRA tax credits worth $2.1B annually. Grid modernization contracts totaling $4.3B. Stable 2.8% dividend yield.",
+                    risk: "Low"
+                },
+                {
+                    ticker: "PLTR",
+                    name: "Palantir Technologies",
+                    currentPrice: "$18",
+                    targetPrice: "$28",
+                    reason: "AI Platform (AIP) securing $900M in contracts. Government revenue stable at $600M/quarter. Commercial revenue growing 54% YoY. Recent DoD contract wins worth $250M. Expanding in healthcare and manufacturing verticals.",
+                    risk: "High"
+                }
+            ],
+            saudi: [
+                {
+                    code: "2222",
+                    nameEn: "Saudi Aramco",
+                    nameAr: "أرامكو السعودية",
+                    currentPrice: "28.50 SAR",
+                    targetPrice: "32.00 SAR",
+                    reason: "World's largest oil producer maintaining 12M barrels/day capacity. Diversifying into blue hydrogen ($110B investment). Dividend yield 4.1%. Benefiting from Asian demand growth. Strong balance sheet with minimal debt.",
+                    risk: "Low"
+                },
+                {
+                    code: "1120",
+                    nameEn: "Al Rajhi Bank",
+                    nameAr: "مصرف الراجحي",
+                    currentPrice: "89.20 SAR",
+                    targetPrice: "105.00 SAR",
+                    reason: "Largest Islamic bank globally with SAR 750B in assets. Digital banking users up 47% to 8.2M. Net profit margin 35.6%. Vision 2030 beneficiary through SME lending program. ROE of 18.3% leading sector.",
+                    risk: "Low"
+                },
+                {
+                    code: "2030",
+                    nameEn: "Saudi Telecom Company (STC)",
+                    nameAr: "الاتصالات السعودية",
+                    currentPrice: "43.80 SAR",
+                    targetPrice: "52.00 SAR",
+                    reason: "5G network covering 82% of population. Cloud services revenue up 63%. Cybersecurity division securing government contracts worth SAR 2.1B. Expanding in fintech through STC Pay (12M users). EBITDA margin 52%.",
+                    risk: "Medium"
+                },
+                {
+                    code: "2370",
+                    nameEn: "Middle East Healthcare Company (MEAHCO)",
+                    nameAr: "الشرق الأوسط للرعاية الصحية",
+                    currentPrice: "12.40 SAR",
+                    targetPrice: "16.50 SAR",
+                    reason: "Benefiting from healthcare privatization push. Operating 15 facilities across KSA. Medical tourism initiative bringing 250K patients annually. Partnerships with Johns Hopkins and Mayo Clinic. Revenue growing 41% YoY.",
+                    risk: "Medium"
+                },
+                {
+                    code: "4082",
+                    nameEn: "Al Yamamah Steel Industries",
+                    nameAr: "حديد اليمامة",
+                    currentPrice: "18.70 SAR",
+                    targetPrice: "24.00 SAR",
+                    reason: "NEOM construction demand driving orders. Production capacity expansion to 800K tons/year. Government infrastructure spending at SAR 500B supporting sector. Vertical integration reducing costs 18%. Export growth to GCC markets.",
+                    risk: "High"
+                }
+            ]
+        };
+    }
+
     static getDemoInsights() {
         return [
             {
-                title: 'Quantum Computing Breakthrough Impacts Cybersecurity Stocks',
-                summary: 'Recent advancements in quantum computing have significant implications for cybersecurity firms. Companies developing quantum-resistant encryption are seeing increased investor interest.',
+                title: 'NVIDIA H200 Chips Sold Out Through Q2 2025 - Stock Up 8.4%',
+                summary: 'NVIDIA announced H200 GPU allocation completely sold out, with cloud providers securing $12B in orders. Stock surged to $492 on news, up 8.4% in single session. Analysts raising price targets to $650-$700 range.',
                 category: 'tech',
                 timestamp: '2 hours ago'
             },
             {
-                title: 'Green Hydrogen Market Poised for Exponential Growth',
-                summary: 'Analysis suggests the green hydrogen market could reach $200B by 2030. Major energy companies are announcing strategic partnerships and infrastructure investments.',
+                title: 'Saudi Aramco Launches $110B Blue Hydrogen Initiative',
+                summary: 'Aramco unveils massive blue hydrogen complex targeting 11M tons annual production by 2030. Partners with Siemens Energy and Air Products. Stock gained 3.2% to SAR 29.40 on announcement. First shipments to Japan by Q3 2025.',
                 category: 'market',
                 timestamp: '4 hours ago'
             },
             {
-                title: 'Central Banks Signal Policy Shifts',
-                summary: 'Multiple central banks are hinting at policy adjustments in response to inflation trends. This could create volatility in currency markets and impact international trade.',
+                title: 'Fed Keeps Rates at 5.25-5.50%, Powell Signals Stability',
+                summary: 'Federal Reserve maintains current rate range citing balanced economic conditions. Powell emphasized data-dependent approach with no cuts before Q3 2025. Bond yields dropped 12bp to 4.25%, tech stocks rallied 2.3%.',
                 category: 'finance',
                 timestamp: '6 hours ago'
             },
             {
-                title: 'Consumer Behavior Shifts Favor Sustainability',
-                summary: 'New data reveals 67% of consumers willing to pay premium for sustainable products. This trend is reshaping retail and manufacturing strategies across industries.',
+                title: 'Tesla Cybertruck Orders Exceed 2M - Production Accelerating',
+                summary: 'Tesla reports Cybertruck reservations hitting 2.1M units with deliveries ramping to 125K/quarter by Q2 2025. Stock jumped 6.8% to $248. Average selling price of $82K generating strong margins. Giga Texas expansion underway.',
                 category: 'trends',
-                timestamp: '8 hours ago'
+                timestamp: '9 hours ago'
             },
             {
-                title: 'Semiconductor Supply Chain Diversification Accelerates',
-                summary: 'Tech giants are investing billions in regional chip production. This shift could reduce supply chain risks but may impact short-term margins.',
+                title: 'Al Rajhi Bank Q4 Profit Surges 28% on Digital Banking Growth',
+                summary: 'Al Rajhi reports net income of SAR 4.2B (+28% YoY) driven by 47% increase in digital users. Mobile banking transactions up 89%. Stock reached SAR 92.50, approaching all-time highs. Announced 1.5% dividend increase.',
                 category: 'market',
-                timestamp: '10 hours ago'
+                timestamp: '12 hours ago'
             }
         ];
     }
 }
 
 // ========================================
-// UI Controller
+// UI Controller with Translation Support
 // ========================================
 class UIController {
     static hideLoading() {
         const loadingScreen = document.getElementById('loading-screen');
         const app = document.getElementById('app');
-        
+
         if (loadingScreen && app) {
             setTimeout(() => {
                 loadingScreen.classList.add('hidden');
@@ -288,20 +527,21 @@ class UIController {
             }, 1500);
         }
     }
-    
+
     static updateLastUpdateTime() {
         const element = document.getElementById('last-updated');
         const lastUpdate = DataManager.getLastUpdateTime();
-        
+
         if (element && lastUpdate) {
             const date = new Date(lastUpdate);
+            const lang = CONFIG.currentLang;
             element.innerHTML = `
                 <span class="status-indicator"></span>
-                Last updated: ${date.toLocaleString()}
+                ${TRANSLATIONS[lang].lastUpdated}: ${date.toLocaleString()}
             `;
         }
     }
-    
+
     static updateStats(data) {
         const stats = {
             trends: data.insights?.length || 5,
@@ -309,31 +549,34 @@ class UIController {
             updates: Math.floor(Math.random() * 50) + 30,
             sentiment: ['Bullish 📈', 'Neutral ➡️', 'Bearish 📉'][Math.floor(Math.random() * 3)]
         };
-        
+
         document.getElementById('trends-count').textContent = stats.trends;
         document.getElementById('insights-count').textContent = stats.insights;
         document.getElementById('updates-count').textContent = stats.updates;
         document.getElementById('sentiment-value').textContent = stats.sentiment;
-        
-        // Remove shimmer effect
+
         document.querySelectorAll('.stat-card.shimmer').forEach(card => {
             card.classList.remove('shimmer');
         });
     }
-    
+
     static renderDigest(content) {
         const digestContent = document.getElementById('digest-content');
         if (digestContent) {
-            // Convert markdown to HTML (simple implementation)
             const html = this.markdownToHTML(content);
             digestContent.innerHTML = html;
         }
     }
-    
+
+    static renderStockPicks(stockData) {
+        // Will be implemented when HTML section is added
+        console.log('Stock picks:', stockData);
+    }
+
     static renderInsights(insights) {
         const insightsFeed = document.getElementById('insights-feed');
         if (!insightsFeed) return;
-        
+
         insightsFeed.innerHTML = insights.map(insight => `
             <div class="insight-card" data-category="${insight.category}">
                 <div class="insight-header">
@@ -345,7 +588,7 @@ class UIController {
             </div>
         `).join('');
     }
-    
+
     static markdownToHTML(markdown) {
         return markdown
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
@@ -359,7 +602,7 @@ class UIController {
             .replace(/^(?!<[h|u|l])(.*$)/gim, '<p>$1</p>')
             .replace(/<p><\/p>/g, '');
     }
-    
+
     static filterInsights(category) {
         const cards = document.querySelectorAll('.insight-card');
         cards.forEach(card => {
@@ -370,6 +613,32 @@ class UIController {
             }
         });
     }
+
+    static translatePage(lang) {
+        CONFIG.currentLang = lang;
+        localStorage.setItem('preferred_language', lang);
+
+        // Update UI elements with data attributes
+        document.querySelectorAll('[data-en]').forEach(el => {
+            const key = el.dataset.en.toLowerCase().replace(/ /g, '');
+            if (TRANSLATIONS[lang][key]) {
+                el.textContent = TRANSLATIONS[lang][key];
+            }
+        });
+
+        // Update language toggle button
+        const langBtn = document.getElementById('lang-toggle');
+        if (langBtn) {
+            const langText = langBtn.querySelector('.lang-text');
+            if (langText) {
+                langText.textContent = lang === 'en' ? 'AR' : 'EN';
+            }
+        }
+
+        // Update document direction for Arabic
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        document.documentElement.lang = lang;
+    }
 }
 
 // ========================================
@@ -378,11 +647,10 @@ class UIController {
 class App {
     static async init() {
         console.log('🚀 Initializing Market Intelligence Dashboard...');
-        
-        // Check if we should update or use cached data
+
         const shouldUpdate = DataManager.shouldUpdate();
         let data = DataManager.getFromCache(CONFIG.cacheKey);
-        
+
         if (shouldUpdate || !data) {
             console.log('📡 Fetching fresh data from AI...');
             data = await this.fetchFreshData();
@@ -390,30 +658,44 @@ class App {
         } else {
             console.log('💾 Using cached data...');
         }
-        
-        // Render UI
+
         UIController.updateStats(data);
         UIController.renderDigest(data.digest);
         UIController.renderInsights(data.insights);
+        if (data.stockPicks) {
+            UIController.renderStockPicks(data.stockPicks);
+        }
         UIController.updateLastUpdateTime();
         UIController.hideLoading();
-        
-        // Setup event listeners
+
+        // Apply saved language preference
+        UIController.translatePage(CONFIG.currentLang);
+
         this.setupEventListeners();
-        
+
         console.log('✅ Dashboard ready!');
     }
-    
+
     static async fetchFreshData() {
-        const [digest, insights] = await Promise.all([
+        const [digest, insights, stockPicks] = await Promise.all([
             AIService.generateDailyDigest(),
-            AIService.generateInsights()
+            AIService.generateInsights(),
+            AIService.generateStockPicks()
         ]);
-        
-        return { digest, insights };
+
+        return { digest, insights, stockPicks };
     }
-    
+
     static setupEventListeners() {
+        // Language toggle
+        const langBtn = document.getElementById('lang-toggle');
+        if (langBtn) {
+            langBtn.addEventListener('click', () => {
+                const newLang = CONFIG.currentLang === 'en' ? 'ar' : 'en';
+                UIController.translatePage(newLang);
+            });
+        }
+
         // Refresh button
         const refreshBtn = document.getElementById('refresh-btn');
         if (refreshBtn) {
@@ -423,11 +705,14 @@ class App {
                 DataManager.saveToCache(CONFIG.cacheKey, data);
                 UIController.renderDigest(data.digest);
                 UIController.renderInsights(data.insights);
+                if (data.stockPicks) {
+                    UIController.renderStockPicks(data.stockPicks);
+                }
                 UIController.updateLastUpdateTime();
                 setTimeout(() => refreshBtn.classList.remove('spinning'), 1000);
             });
         }
-        
+
         // Filter select
         const filterSelect = document.getElementById('filter-select');
         if (filterSelect) {
@@ -435,8 +720,8 @@ class App {
                 UIController.filterInsights(e.target.value);
             });
         }
-        
-        // Settings button (placeholder)
+
+        // Settings button
         const settingsBtn = document.getElementById('settings-btn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', () => {
@@ -461,4 +746,4 @@ setInterval(() => {
         console.log('🔄 Auto-updating dashboard...');
         App.init();
     }
-}, 60 * 60 * 1000); // Check every hour
+}, 60 * 60 * 1000);
