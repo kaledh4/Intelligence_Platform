@@ -1,7 +1,7 @@
 name: Daily AI Updates & Deploy to GitHub Pages
 
 on:
-  # Run daily at 6 AM UTC
+  # Run daily at 6 AM UTC (once per day)
   schedule:
     - cron: '0 6 * * *'
   

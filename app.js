@@ -3,9 +3,10 @@
 // ========================================
 const CONFIG = {
     apiEndpoint: 'https://openrouter.ai/api/v1/chat/completions',
-    model: 'x-ai/grok-beta',
+    model: 'x-ai/grok-4.1-fast:free', // 2M context, 30K max output, FREE!
+    arxivApi: 'https://export.arxiv.org/api/query',
     apiKey: window.OPENROUTER_API_KEY || '',
-    updateInterval: 24 * 60 * 60 * 1000,
+    updateInterval: 24 * 60 * 60 * 1000, // 24 hours (once daily)
     cacheKey: 'market_intelligence_data',
     lastUpdateKey: 'last_update_time',
     currentLang: localStorage.getItem('preferred_language') || 'en'
@@ -159,7 +160,7 @@ class AIService {
                         content: prompt
                     }],
                     temperature: 0.7,
-                    max_tokens: 3500
+                    max_tokens: 15000 // Use ~50% of 30K max output for comprehensive reports
                 })
             });
 
