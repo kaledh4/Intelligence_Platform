@@ -7,7 +7,7 @@ const CONFIG = {
     arxivApi: 'https://export.arxiv.org/api/query',
     apiKey: window.OPENROUTER_API_KEY || '',
     updateInterval: 24 * 60 * 60 * 1000, // 24 hours (once daily)
-    cacheKey: 'market_intelligence_data',
+    cacheKey: 'market_intelligence_data_v2',
     lastUpdateKey: 'last_update_time',
     currentLang: localStorage.getItem('preferred_language') || 'en'
 };
@@ -176,7 +176,7 @@ class AIService {
         }
     }
 
-    static async generateDailyDigest(analysisData = null) {
+    static async generateDailyDigest(analysisData = null, arxivPapers = []) {
         let analysisContext = "";
         if (analysisData) {
             analysisContext = `
@@ -191,10 +191,16 @@ MARKET ANALYSIS DATA (Moore Analysis / Implied Probability):
 `;
         }
 
+        let researchContext = "";
+        if (arxivPapers && arxivPapers.length > 0) {
+            researchContext = "\nLATEST ACADEMIC RESEARCH (arXiv):\n" + arxivPapers.map(p => `- ${p.title}: ${p.summary}`).join('\n');
+        }
+
         const prompt = `You are a senior financial analyst. Generate an EXTENSIVE, professional market intelligence report for ${new Date().toLocaleDateString()}. 
-Use the provided Market Analysis Data to ground your predictions.
+Use the provided Market Analysis Data and Academic Research to ground your predictions.
 
 ${analysisContext}
+${researchContext}
 
 REQUIRED SECTIONS:
 
@@ -208,15 +214,19 @@ REQUIRED SECTIONS:
    - Specific company news with quantitative impact.
    - Connect macro events (Fed, Geopolitics) to market moves.
 
-3. **🎯 Strategic Opportunities**
+3. **🔬 Research & Quantitative Edge**
+   - Synthesize the provided arXiv research papers. How do these findings apply to current market conditions? (e.g., "New paper on volatility modeling suggests...")
+   - Combine this with the Moore Analysis probability distribution.
+
+4. **🎯 Strategic Opportunities**
    - Identify undervalued sectors based on the probability distribution.
    - Suggest risk-managed approaches (e.g., "Given the 68% range of X-Y, consider spreads...").
 
-4. **⚠️ Risk & Scenario Analysis**
+5. **⚠️ Risk & Scenario Analysis**
    - Downside risks based on the lower bound of the expected range.
    - Tail risk events.
 
-Format as Markdown. Be sophisticated, data-driven, and authoritative.`;
+Format as Markdown. Use clear headers, bullet points, and bold text for readability. Avoid long walls of text.`;
 
         const content = await this.fetchInsights(prompt);
         return this.parseDigestContent(content);
@@ -299,6 +309,37 @@ Return as JSON array:
 
         const content = await this.fetchInsights(prompt);
         return this.parseInsightsContent(content);
+    }
+
+    static async fetchArxivData() {
+        try {
+            // Query for Quantitative Finance (q-fin) and Economics (econ)
+            const query = 'cat:q-fin.ST OR cat:q-fin.GN OR cat:q-fin.RM OR cat:q-fin.PM';
+            const url = `${CONFIG.arxivApi}?search_query=${encodeURIComponent(query)}&start=0&max_results=5&sortBy=submittedDate&sortOrder=descending`;
+
+            const response = await fetch(url);
+            const str = await response.text();
+
+            // Simple XML parsing
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(str, "text/xml");
+            const entries = xmlDoc.getElementsByTagName("entry");
+
+            const papers = [];
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                papers.push({
+                    title: entry.getElementsByTagName("title")[0].textContent.replace(/\n/g, ' ').trim(),
+                    summary: entry.getElementsByTagName("summary")[0].textContent.replace(/\n/g, ' ').trim().substring(0, 200) + "...",
+                    published: new Date(entry.getElementsByTagName("published")[0].textContent).toLocaleDateString(),
+                    link: entry.getElementsByTagName("id")[0].textContent
+                });
+            }
+            return papers;
+        } catch (error) {
+            console.error('Error fetching arXiv data:', error);
+            return [];
+        }
     }
 
     static parseDigestContent(content) {
@@ -627,14 +668,18 @@ class UIController {
         });
     }
 
-    static renderAnalysis(analysisData) {
+    static renderResearch(analysisData, papers) {
         const container = document.getElementById('analysis-container');
-        if (!container || !analysisData) return;
+        if (!container) return;
 
-        container.innerHTML = `
-            <div class="analysis-card">
+        let html = '<div class="research-grid">';
+
+        // 1. Moore Analysis Card
+        if (analysisData) {
+            html += `
+            <div class="analysis-card moore-card">
                 <div class="analysis-header">
-                    <h3>🔮 Moore Analysis: Market Implied Probability</h3>
+                    <h3>🔮 Moore Analysis: Market Probability</h3>
                     <span class="tag ${analysisData.analysis.sentiment.toLowerCase()}">${analysisData.analysis.sentiment}</span>
                 </div>
                 <div class="analysis-content">
@@ -656,11 +701,34 @@ class UIController {
                         <img src="./market_analysis_chart.png" alt="Market Probability Distribution" onerror="this.style.display='none'">
                     </div>
                     <p class="analysis-explainer">
-                        This heatmap represents the market's consensus on future price probability, derived from options pricing curvature (Breeden-Litzenberger).
+                        Market consensus derived from options pricing curvature (Breeden-Litzenberger).
                     </p>
                 </div>
-            </div>
-        `;
+            </div>`;
+        }
+
+        // 2. arXiv Research Card
+        if (papers && papers.length > 0) {
+            html += `
+            <div class="analysis-card research-papers-card">
+                <div class="analysis-header">
+                    <h3>🔬 Latest Quantitative Research (arXiv)</h3>
+                    <span class="tag neutral">${papers.length} Papers</span>
+                </div>
+                <div class="papers-list">
+                    ${papers.map(p => `
+                        <div class="paper-item">
+                            <a href="${p.link}" target="_blank" class="paper-title">${p.title}</a>
+                            <span class="paper-date">${p.published}</span>
+                            <p class="paper-summary">${p.summary}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
         container.style.display = 'block';
     }
 
@@ -711,9 +779,10 @@ class App {
 
         UIController.updateStats(data);
         UIController.renderDigest(data.digest);
-        if (data.analysis) {
-            UIController.renderAnalysis(data.analysis);
-        }
+
+        // Render combined research section
+        UIController.renderResearch(data.analysis, data.research);
+
         UIController.renderInsights(data.insights);
         if (data.stockPicks) {
             UIController.renderStockPicks(data.stockPicks);
@@ -741,13 +810,16 @@ class App {
             console.log('No local analysis data found');
         }
 
+        // Fetch arXiv data
+        const arxivPapers = await AIService.fetchArxivData();
+
         const [digest, insights, stockPicks] = await Promise.all([
-            AIService.generateDailyDigest(analysisData),
+            AIService.generateDailyDigest(analysisData, arxivPapers),
             AIService.generateInsights(),
             AIService.generateStockPicks()
         ]);
 
-        return { digest, insights, stockPicks, analysis: analysisData };
+        return { digest, insights, stockPicks, analysis: analysisData, research: arxivPapers };
     }
 
     static setupEventListeners() {
