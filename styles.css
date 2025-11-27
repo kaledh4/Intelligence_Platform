@@ -813,3 +813,94 @@ body::before {
         padding: 0;
     }
 }
+
+/* ========================================
+   Analysis Section
+   ======================================== */
+.analysis-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.analysis-card {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    overflow: hidden;
+}
+
+.analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.analysis-header h3 {
+    font-size: 1.25rem;
+    color: var(--color-accent-success);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.tag {
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.tag.bullish { background: rgba(0, 245, 160, 0.2); color: #00f5a0; }
+.tag.bearish { background: rgba(255, 0, 110, 0.2); color: #ff006e; }
+.tag.neutral { background: rgba(255, 184, 0, 0.2); color: #ffb800; }
+
+.analysis-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.stat-item {
+    background: rgba(255, 255, 255, 0.03);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-item .label {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+    margin-bottom: 4px;
+}
+
+.stat-item .value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.analysis-chart {
+    width: 100%;
+    margin-bottom: var(--spacing-md);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.analysis-chart img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.analysis-explainer {
+    font-size: 0.875rem;
+    color: var(--color-text-tertiary);
+    font-style: italic;
+    text-align: center;
+}

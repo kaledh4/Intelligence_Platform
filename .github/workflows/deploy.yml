@@ -36,6 +36,19 @@ jobs:
         with:
           node-version: '20'
       
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: |
+          pip install yfinance pandas numpy scipy matplotlib
+
+      - name: Run Moore Analysis
+        run: |
+          python market_analysis.py
+      
       - name: Generate AI digest and insights
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -76,6 +89,8 @@ jobs:
             service-worker.js
             icons/
             README.md
+            market_analysis.json
+            market_analysis_chart.png
           retention-days: 1
 
   # Job 2: Deploy to GitHub Pages

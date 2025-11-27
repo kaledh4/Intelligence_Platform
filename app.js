@@ -176,35 +176,47 @@ class AIService {
         }
     }
 
-    static async generateDailyDigest() {
-        const prompt = `You are a financial analyst. Generate a comprehensive, detailed market intelligence digest for ${new Date().toLocaleDateString()}. Be specific and data-driven with real numbers and actionable insights.
+    static async generateDailyDigest(analysisData = null) {
+        let analysisContext = "";
+        if (analysisData) {
+            analysisContext = `
+MARKET ANALYSIS DATA (Moore Analysis / Implied Probability):
+- Ticker: ${analysisData.meta.ticker}
+- Expiration: ${analysisData.meta.expiration}
+- Current Price: ${analysisData.analysis.current_price}
+- Market Expected Price (Peak Probability): ${analysisData.analysis.market_expected_price}
+- Bullish Probability: ${analysisData.analysis.bullish_probability}%
+- 68% Confidence Range: ${analysisData.analysis.expected_range_68pct.low} - ${analysisData.analysis.expected_range_68pct.high}
+- Sentiment: ${analysisData.analysis.sentiment}
+`;
+        }
+
+        const prompt = `You are a senior financial analyst. Generate an EXTENSIVE, professional market intelligence report for ${new Date().toLocaleDateString()}. 
+Use the provided Market Analysis Data to ground your predictions.
+
+${analysisContext}
 
 REQUIRED SECTIONS:
 
-1. **📊 Market Overview** (100-150 words)
-- Current S&P 500, NASDAQ, Dow Jones trends with percentages
-- Sector performance (top 3 gainers and losers)
-- Trading volume commentary
-- Market sentiment indicators
+1. **📊 Executive Market Overview** (200 words)
+   - Analyze S&P 500, NASDAQ, Dow trends.
+   - Integrate the "Moore Analysis" data: Discuss what the options market is pricing in for the next month. Mention the implied probability and expected range.
+   - Compare implied volatility vs realized volatility if inferred.
 
-2. **💡 Top 5 Critical Insights**
-Each with title, 2-3 sentences, and impact assessment:
-- Technology sector developments
-- Energy and commodities
-- Financial markets
-- Geopolitical impacts
-- Economic indicators
+2. **💡 Deep Dive Insights** (4-5 items)
+   - Detailed analysis of key sectors (Tech, Energy, Finance).
+   - Specific company news with quantitative impact.
+   - Connect macro events (Fed, Geopolitics) to market moves.
 
-3. **🎯 Investment Opportunities**
-- 3 sectors with specific reasoning
-- Emerging market trends
-- Risk/reward analysis
+3. **🎯 Strategic Opportunities**
+   - Identify undervalued sectors based on the probability distribution.
+   - Suggest risk-managed approaches (e.g., "Given the 68% range of X-Y, consider spreads...").
 
-4. **⚠️ Risk Factors**
-- Top 5 risks with impact probability
-- Specific dates/events to watch
+4. **⚠️ Risk & Scenario Analysis**
+   - Downside risks based on the lower bound of the expected range.
+   - Tail risk events.
 
-Generate in markdown format. Be specific, use real data points, and avoid generic statements.`;
+Format as Markdown. Be sophisticated, data-driven, and authoritative.`;
 
         const content = await this.fetchInsights(prompt);
         return this.parseDigestContent(content);
@@ -615,6 +627,43 @@ class UIController {
         });
     }
 
+    static renderAnalysis(analysisData) {
+        const container = document.getElementById('analysis-container');
+        if (!container || !analysisData) return;
+
+        container.innerHTML = `
+            <div class="analysis-card">
+                <div class="analysis-header">
+                    <h3>🔮 Moore Analysis: Market Implied Probability</h3>
+                    <span class="tag ${analysisData.analysis.sentiment.toLowerCase()}">${analysisData.analysis.sentiment}</span>
+                </div>
+                <div class="analysis-content">
+                    <div class="analysis-stats">
+                        <div class="stat-item">
+                            <span class="label">Expected Price</span>
+                            <span class="value">${analysisData.analysis.market_expected_price}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Bullish Prob</span>
+                            <span class="value">${analysisData.analysis.bullish_probability}%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Range (68%)</span>
+                            <span class="value">${analysisData.analysis.expected_range_68pct.low} - ${analysisData.analysis.expected_range_68pct.high}</span>
+                        </div>
+                    </div>
+                    <div class="analysis-chart">
+                        <img src="./market_analysis_chart.png" alt="Market Probability Distribution" onerror="this.style.display='none'">
+                    </div>
+                    <p class="analysis-explainer">
+                        This heatmap represents the market's consensus on future price probability, derived from options pricing curvature (Breeden-Litzenberger).
+                    </p>
+                </div>
+            </div>
+        `;
+        container.style.display = 'block';
+    }
+
     static translatePage(lang) {
         CONFIG.currentLang = lang;
         localStorage.setItem('preferred_language', lang);
@@ -662,6 +711,9 @@ class App {
 
         UIController.updateStats(data);
         UIController.renderDigest(data.digest);
+        if (data.analysis) {
+            UIController.renderAnalysis(data.analysis);
+        }
         UIController.renderInsights(data.insights);
         if (data.stockPicks) {
             UIController.renderStockPicks(data.stockPicks);
@@ -678,13 +730,24 @@ class App {
     }
 
     static async fetchFreshData() {
+        // Try to fetch pre-computed market analysis
+        let analysisData = null;
+        try {
+            const response = await fetch('./market_analysis.json');
+            if (response.ok) {
+                analysisData = await response.json();
+            }
+        } catch (e) {
+            console.log('No local analysis data found');
+        }
+
         const [digest, insights, stockPicks] = await Promise.all([
-            AIService.generateDailyDigest(),
+            AIService.generateDailyDigest(analysisData),
             AIService.generateInsights(),
             AIService.generateStockPicks()
         ]);
 
-        return { digest, insights, stockPicks };
+        return { digest, insights, stockPicks, analysis: analysisData };
     }
 
     static setupEventListeners() {
